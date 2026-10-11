@@ -10,3 +10,10 @@ test-results/
 
 # 生成的回放高亮支持文件
 tests/recorded/_pw-highlight.js
+
+# v2：扩展里的 bundle 由 npm run build:agent 生成
+/extension/pw-agent.js
+# v2：Java 编译验证用的 jar
+.jars/
+# v2：Agent 导出的脚本（含本次录制的临时地址）
+tests/generated/

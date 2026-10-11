@@ -4,6 +4,15 @@
 
 本质是一个可嵌入的迷你 `playwright codegen`——但可以在已运行的服务、需登录态、内网环境中录制，并支持录制中途随时暂停/继续。
 
+有两种用法：
+
+| | v1 CLI 录制器 | v2 浏览器 Agent（引入即录） |
+|---|---|---|
+| 怎么用 | `node record.js --url …` 起一个受控浏览器 | 页面里引一个 `<script>`，右下角直接录 |
+| 需要 Node / Playwright | 需要 | **不需要**，纯浏览器 |
+| 适用场景 | 本地开发、需要干净 context、要 CLI 控制 | 已上线的站点、给别人演示、录完即导出 |
+| 导出语言 | JavaScript | JavaScript / Python / Java |
+
 ## 目录结构
 
 ```
@@ -12,24 +21,32 @@ pw-recorder/
 ├── playwright.config.js            # 只跑录出来的脚本时用（npm test）
 ├── package.json
 ├── src/
-│   ├── injected.js                 # 注入页面的事件捕获脚本
-│   ├── panel.js                    # 页面右下角控制面板
+│   ├── injected.js                 # 注入页面的事件捕获脚本（v1/v2 共用）
+│   ├── panel.js                    # v1 的右下角控制面板
 │   ├── highlight-client.js         # 页面内操作高亮（录制/回放共用）
 │   ├── playback-highlight.js       # 生成回放高亮支持文件 _pw-highlight.js
-│   ├── CodeGenerator.js            # 动作 → Playwright 代码
-│   ├── Recorder.js                 # 核心录制器（Node 侧）
+│   ├── CodeGenerator.js            # 动作 → 语言无关的 locator 描述 + JS 代码
+│   ├── lang/                       # python.js / java.js / index.js —— 多语言导出
+│   ├── agent/                      # agent.js（浏览器内录制器）/ ui.js（控件+导出弹窗）
+│   ├── Recorder.js                 # v1 核心录制器（Node 侧）
 │   ├── url.js                      # 地址补全（www.x.com → https://…）
 │   └── browserPath.js              # 自动定位项目内安装的浏览器
+├── dist/pw-agent.js                # v2 浏览器 bundle（npm run build:agent 生成，已提交）
+├── extension/                      # v2 Chrome 扩展壳（manifest + 生成的 bundle）
 ├── scripts/
+│   ├── build-agent.js              # 迷你打包器（零依赖，含漂移检查）
+│   ├── serve.js                    # 手动体验用的静态服务
 │   ├── smoke.js                    # 动作→代码生成自检（不开浏览器）
-│   ├── e2e.js                      # 无头端到端自检（注入→捕获→生成→导出）
+│   ├── e2e.js                      # v1 无头端到端自检
+│   ├── agent-e2e.js                # v2 端到端自检（引入→录制→弹窗导出→真回放/编译）
 │   ├── highlight-check.js          # 高亮自检 + 截图取证
 │   ├── record-demo.js              # 无头录制 demo 页面，产出可回放的 spec
 │   ├── record-live.js              # 录制真实站点（配 driver 脚本）
 │   └── live/todomvc.js             # 真实站点示例 driver（TodoMVC）
 └── tests/
-    ├── fixtures/demo.html          # 离线示例页面（登录表单 + 事件覆盖）
-    └── recorded/                   # 导出目录（含生成的支持文件）
+    ├── fixtures/                   # 离线示例页（demo.html / agent-demo*.html）
+    ├── recorded/                   # v1 导出目录（含生成的支持文件）
+    └── generated/                  # v2 Agent 导出的三语言脚本
 ```
 
 ## 安装
@@ -46,7 +63,7 @@ npm run install-browser      # 下载 Chromium（约 150MB，首次需要）
 > 受限环境（沙箱/CI）里浏览器可能装在项目内的 `./.pw-browsers`。
 > 只要显式设置过 `PLAYWRIGHT_BROWSERS_PATH` 就以你为准，否则脚本会自动使用该目录。
 
-## 启动录制
+## v1 用法：启动录制
 
 ```bash
 node record.js --url https://example.com --output tests/recorded/login.spec.js --title "登录流程"
@@ -82,7 +99,7 @@ npm run demo:replay   # 回放刚录出来的脚本
 npm run replay-check  # 录制 + 回放，一步验证闭环
 ```
 
-## 录真实站点（真实站点回归）
+## v1 用法：录真实站点（可回归）
 
 `npm run record` 需要你手动操作；如果想让录制可重复（CI、回归），用 driver 脚本：
 
@@ -109,6 +126,127 @@ module.exports.snapshot = async (page) =>
 
 `--verify` 的价值：**"回放没报错"不等于"录对了"**。`.nth(1)` 万一指错条目，回放照样通过。
 所以它会先不录制跑一遍取终态，再回放录制脚本比对同一个终态。
+
+## v2：浏览器内 Agent（引入即录）
+
+参考 [alibaba/page-agent](https://github.com/alibaba/page-agent) 的形态：单个 IIFE bundle，页面里引一行就开始录，不依赖 Node 和 Playwright。
+
+![导出弹窗](docs/agent-export-python.png)
+
+### 三种引入方式
+
+**① script 标签**（自己的站点，最省事）
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/lxf-lxf/pw-recoder@v2.0/dist/pw-agent.js"></script>
+```
+
+引入即自动挂控件并开始录制。想控制时机：
+
+```html
+<!-- 只挂 API，什么都不显示 -->
+<script src="/dist/pw-agent.js?autoInit=false"></script>
+<script>
+  PWAgent.init({ autoStart: false, title: '下单流程' });  // 手动初始化
+  PWAgent.start();                                        // 手动开录
+</script>
+```
+
+**② 书签脚本**（任意页面，但受目标站 CSP 限制）
+
+把下面这段存成书签，在目标页面点一下：
+
+```js
+javascript:(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/gh/lxf-lxf/pw-recoder@v2.0/dist/pw-agent.js';document.body.appendChild(s)})()
+```
+
+**③ Chrome 扩展**（任意页面，不受 CSP 限制）
+
+```bash
+npm install && npm run build:agent     # 生成 extension/pw-agent.js
+# chrome://extensions → 打开"开发者模式" → "加载已解压的扩展程序" → 选 extension/ 目录
+```
+
+扩展注入时**不会自动开录**（否则每个页面都自动录会很烦），点右下角"开始"即可。
+
+### 配置
+
+`<script>` 上可以用 `data-*`，也可以用查询参数，两者等价：
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `autoInit` | `true` | `false` 时只挂 `window.PWAgent`，不显示任何 UI |
+| `autoStart` | `true` | 引入后是否立刻开始录制（扩展注入时默认 `false`） |
+| `title` | `recorded flow` | 导出脚本的标题（决定文件名/函数名/类名） |
+| `highlight` | `true` | 录制时是否高亮被捕获的操作 |
+| `persist` | `true` | 是否把录制状态存 sessionStorage（跨页续录的基础） |
+
+```html
+<script src="/dist/pw-agent.js" data-title="登录流程" data-highlight="false"></script>
+```
+
+### 跨页续录
+
+录制状态写在 `sessionStorage`（同一标签页），刷新或跳转后自动接上。
+如果换页是被录下来的点击带过去的，不会再补一条 `goto`（交给 Playwright 的 `click()` 自动等待导航）；
+如果是用户手输地址跳的，才会补 `goto`。
+
+### 导出弹窗
+
+点"结束并导出"弹出预览窗口：**JavaScript / Python / Java** 三个标签页，带行号、文件名、复制、下载、重新录制。
+
+| 语言 | 框架 | 产物 |
+|------|------|------|
+| JavaScript | Playwright Test | `agent-demo-flow.spec.js` |
+| Python | pytest + Playwright (sync) | `test_agent_demo_flow.py` |
+| Java | JUnit 5 + Playwright | `AgentDemoFlowTest.java` |
+
+三种语言共用同一套选择器决策（`resolveLocator`），所以选出来的元素完全一致：
+
+```js
+await page.getByLabel('Email').fill('me@example.com');
+await page.getByLabel('Row action').nth(1).click();
+await page.getByRole('button', { name: '隐藏按钮' }).click();
+```
+
+```python
+page.get_by_label("Email").fill("me@example.com")
+page.get_by_label("Row action").nth(1).click()
+page.get_by_role("button", name="隐藏按钮").click()
+```
+
+```java
+page.getByLabel("Email").fill("me@example.com");
+page.getByLabel("Row action").nth(1).click();
+page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("隐藏按钮")).click();
+```
+
+Java 的 `AriaRole` 是枚举：角色名不在枚举里（页面自定义 role）会自动退化成 CSS 选择器，保证生成的代码一定能编译。
+
+### 手动体验
+
+```bash
+npm run agent:demo
+# → http://127.0.0.1:4173/tests/fixtures/agent-demo.html
+```
+
+### 重新跑 UI 自动化测试
+
+导出的脚本本身就是可重跑的测试，不用再经过录制器：
+
+```bash
+# JavaScript：放进 tests/generated/ 直接跑
+npx playwright test --config playwright.generated.config.js
+
+# Python
+pip install playwright pytest-playwright && playwright install chromium
+pytest tests/generated/test_agent_demo_flow.py
+
+# Java
+mvn test -Dtest=AgentDemoFlowTest     # 依赖 com.microsoft.playwright:playwright + junit-jupiter
+```
+
+`npm run v2:check` 会把这些**真的跑一遍**：录 → 导出三语言 → JavaScript 用 Playwright 回放 → Python `py_compile` → Java `javac` 编译。
 
 ## 操作高亮
 
@@ -160,7 +298,7 @@ PW_HL_HOLD=2500 npx playwright test tests/recorded/demo.spec.js --headed
 
 重新生成截图证据：`npm run highlight:check`（截图写入 `docs/`）。
 
-## 两种控制方式
+## v1 用法：两种控制方式
 
 **页面悬浮面板**：`Pause / Resume`、`Save`、`Reset`，右侧是已录动作数。面板状态与终端命令双向同步，跳转/刷新后会自动对齐。
 
@@ -180,7 +318,7 @@ quit        退出
 > 报一行原因，然后把服务拉起来、敲 `goto <url>` 就能继续录。
 > 失败的地址不会留在动作列表里。
 
-## 导出结果示例
+## v1 用法：导出结果示例
 
 下面这段是 `npm run replay-check` 的真实产物，回放通过（1 passed）：
 
@@ -216,6 +354,8 @@ npm test
 | `npm run highlight:check` | 录制高亮 / 回放高亮 / 高亮不污染录制 + 截图取证 | 是（无头） |
 | `npm run replay-check` | 录制 → 导出 → 真实回放（本地 fixture） | 是（无头） |
 | `npm run live:verify` | 真实站点录制 → 回放 → 终态断言 | 是（无头，需联网） |
+| `npm run v2:check` | bundle 是否最新 + v2 全链路（导出三语言 → 回放 / py_compile / javac） | 是（无头；Java 编译需联网取 jar） |
+| `npm run e2e:agent` | 只跑 v2 全链路 | 同上 |
 
 ## 关键设计点
 
@@ -241,7 +381,7 @@ npm test
 | 开关可控 | 页面面板 + 终端命令 + `Recorder.stop()/resume()` API 三种方式 |
 | 点击触发导航 | 不单独记录 `goto`，交给 Playwright 的 `click()` 自动等待导航 |
 
-## 作为库使用
+## v1 用法：作为库引入
 
 ```js
 const { chromium } = require('@playwright/test');

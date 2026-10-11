@@ -1,8 +1,8 @@
 {
   "name": "pw-recorder",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "可录制的 Playwright IDE：悬浮面板 + 终端命令控制，用户操作实时转 Playwright Test 代码并导出 .spec.js",
+  "description": "可录制的 Playwright IDE：CLI 录制器 + 浏览器内 Agent（引入即录），支持导出 JavaScript / Python / Java 脚本",
   "main": "record.js",
   "bin": {
     "pw-recorder": "record.js"
@@ -11,8 +11,12 @@
     "record": "node record.js",
     "demo": "node record.js --url file://$PWD/tests/fixtures/demo.html --output tests/recorded/demo.spec.js --title \"demo flow\"",
     "smoke": "node scripts/smoke.js",
+    "build:agent": "node scripts/build-agent.js",
     "e2e": "node scripts/e2e.js",
     "highlight:check": "node scripts/highlight-check.js",
+    "agent:demo": "node scripts/serve.js",
+    "e2e:agent": "node scripts/agent-e2e.js",
+    "v2:check": "node scripts/build-agent.js --check && node scripts/agent-e2e.js",
     "demo:record": "node scripts/record-demo.js",
     "demo:replay": "playwright test tests/recorded/demo.spec.js",
     "replay-check": "npm run demo:record && npm run demo:replay",

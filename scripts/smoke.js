@@ -123,3 +123,63 @@ assert.ok(supportSrc.includes('wrapLocator') && supportSrc.includes('ACTION_METH
 new Function('require', spec);
 
 console.log('✅ smoke: 全部断言通过，生成代码可被 JS 解析');
+
+// ---- v2：多语言导出 ---------------------------------------------------------
+const { LANGS, byId } = require('../src/lang');
+const { resolveLocator } = require('../src/CodeGenerator');
+
+// 语言无关的 locator 描述
+assert.deepStrictEqual(
+  resolveLocator({ tag: 'input', testId: 'x', match: { testId: { n: 3, i: 1 } } }),
+  { kind: 'testId', value: 'x', nth: 1 },
+);
+assert.deepStrictEqual(
+  resolveLocator({ tag: 'a', text: 'Go', match: { role: { n: 1, i: 0 } } }),
+  { kind: 'role', role: 'link', name: 'Go', nth: null },
+);
+
+// 文件名 / 函数名 / 类名
+assert.strictEqual(byId('javascript').filename('Demo Flow'), 'demo-flow.spec.js');
+assert.strictEqual(byId('python').filename('Demo Flow'), 'test_demo_flow.py');
+assert.strictEqual(byId('java').filename('Demo Flow'), 'DemoFlowTest.java');
+assert.deepStrictEqual(LANGS.map((l) => l.id), ['javascript', 'python', 'java']);
+
+const v2actions = [
+  { type: 'goto', url: 'https://example.com/' },
+  { type: 'fill', target: { tag: 'input', testId: 'x', match: { testId: { n: 3, i: 1 } } }, value: 'hi "there"' },
+  { type: 'click', target: { tag: 'button', text: '隐藏按钮' }, modifiers: { ctrl: true, shift: true } },
+  { type: 'check', target: { tag: 'input', type: 'checkbox', ariaLabel: 'Remember me' }, checked: false },
+  { type: 'hover', target: { tag: 'div', id: 'hover-box' } },
+  { type: 'click', target: { tag: 'div', role: 'mycustomrole', text: 'X', tagPath: 'div > span' } },
+];
+const js2 = byId('javascript').generate(v2actions, { title: 'Demo Flow', highlight: false });
+const py2 = byId('python').generate(v2actions, { title: 'Demo Flow' });
+const jv2 = byId('java').generate(v2actions, { title: 'Demo Flow' });
+
+// 同一元素在三种语言里必须用同一套选择器策略
+assert.ok(js2.includes("page.getByTestId('x').nth(1).fill('hi \"there\"')"));
+assert.ok(py2.includes('page.get_by_test_id("x").nth(1).fill("hi \\"there\\"")'));
+assert.ok(jv2.includes('page.getByTestId("x").nth(1).fill("hi \\"there\\"");'));
+
+// 修饰键
+assert.ok(js2.includes("click({ modifiers: ['Control', 'Shift'] })"));
+assert.ok(py2.includes('click(modifiers=["Control", "Shift"])'));
+assert.ok(jv2.includes('setModifiers(Arrays.asList(KeyboardModifier.CONTROL, KeyboardModifier.SHIFT))'));
+
+// uncheck / hover / 自定义 role
+assert.ok(js2.includes(".uncheck();") && py2.includes('.uncheck()') && jv2.includes('.uncheck();'));
+assert.ok(js2.includes("page.locator('#hover-box').hover();"));
+assert.ok(py2.includes('page.locator("#hover-box").hover()'));
+assert.ok(jv2.includes('page.locator("#hover-box").hover();'));
+// Java 的 AriaRole 是枚举：未知角色必须退化成 CSS，不能生成编译不过的枚举值
+assert.ok(jv2.includes('page.locator("div > span").click();'), 'Java 未知 role 应退化成 CSS 选择器');
+assert.ok(!jv2.includes('AriaRole.MYCUSTOMROLE'));
+assert.ok(js2.includes("page.getByRole('mycustomrole', { name: 'X' })"), 'JS/Python 可以用字符串角色');
+
+// 三种语言都要覆盖到每一个动作
+for (const code of [js2, py2, jv2]) {
+  assert.ok(code.includes('goto') || code.includes('navigate'));
+  assert.ok(code.includes('hover'));
+  assert.ok(code.includes('uncheck'));
+}
+assert.ok(!py2.includes('\n    \n'), 'Python 生成结果不应有空行残留');
