@@ -1,0 +1,2 @@
+# 导出的录制脚本存放目录
+# 用法: node record.js --url <url> --output tests/recorded/<name>.spec.js

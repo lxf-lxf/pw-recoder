@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>pw-recorder demo</title>
+<style>
+  body { font: 15px/1.6 system-ui, -apple-system, sans-serif; max-width: 520px; margin: 60px auto; padding: 0 20px; color:#18181b }
+  h1 { font-size: 20px }
+  label { display:block; margin: 14px 0 4px; font-weight: 600 }
+  input, select, button { font: inherit; padding: 8px 10px; border:1px solid #d4d4d8; border-radius:8px; width:100%; box-sizing:border-box }
+  button { background:#2563eb; color:#fff; border:0; margin-top:18px; cursor:pointer; width:auto; padding:8px 18px }
+  .row { display:flex; gap:8px; align-items:center; margin-top:14px }
+  .row input { width:auto }
+  #msg { margin-top:16px; font-weight:600; color:#16a34a; min-height:24px }
+  fieldset { border:1px solid #e4e4e7; border-radius:10px; margin-top:22px }
+</style>
+</head>
+<body>
+  <h1>pw-recorder demo</h1>
+
+  <form id="login" onsubmit="return false">
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" placeholder="you@example.com">
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" aria-label="Password">
+
+    <label for="plan">Plan</label>
+    <select id="plan" name="plan">
+      <option value="free">Free</option>
+      <option value="pro">Pro</option>
+      <option value="team">Team</option>
+    </select>
+
+    <div class="row">
+      <input id="remember" name="remember" type="checkbox">
+      <label for="remember" style="margin:0;font-weight:400">Remember me</label>
+    </div>
+
+    <button type="submit" data-testid="login-submit">Log in</button>
+  </form>
+
+  <fieldset>
+    <legend>事件覆盖测试</legend>
+    <button id="dbl" type="button">双击我 (dblclick)</button>
+    <input data-testid="search" placeholder="Search" aria-label="Search">
+    <div id="msg"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>重复元素 / hover 才可见</legend>
+    <ul id="rows" style="list-style:none;padding:0">
+      <li><button aria-label="Row action" class="row-action">操作</button></li>
+      <li><button aria-label="Row action" class="row-action">操作</button></li>
+    </ul>
+    <div id="hover-box" class="hover-box" style="padding:12px;border:1px dashed #a1a1aa;border-radius:8px">
+      鼠标移到这里才会出现按钮
+      <button id="hover-btn" class="hidden-action" type="button">隐藏按钮</button>
+    </div>
+  </fieldset>
+
+  <style>
+    /* 复刻 TodoMVC 的删除按钮：默认 display:none，:hover 才 block。
+       这类元素回放时必须在 click 前补一步 hover。 */
+    .hidden-action { display: none; }
+    .hover-box:hover .hidden-action { display: block; }
+  </style>
+
+  <script>
+    document.getElementById('dbl').addEventListener('dblclick', function () {
+      document.getElementById('msg').textContent = 'dblclick 已触发 ✓';
+    });
+    document.getElementById('login').addEventListener('submit', function () {
+      document.getElementById('msg').textContent = 'submit 已触发 ✓';
+    });
+    document.querySelector('[data-testid="search"]').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') document.getElementById('msg').textContent = 'Enter 已触发 ✓';
+    });
+  </script>
+</body>
+</html>

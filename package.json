@@ -1,0 +1,27 @@
+{
+  "name": "pw-recorder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "可录制的 Playwright IDE：悬浮面板 + 终端命令控制，用户操作实时转 Playwright Test 代码并导出 .spec.js",
+  "main": "record.js",
+  "bin": {
+    "pw-recorder": "record.js"
+  },
+  "scripts": {
+    "record": "node record.js",
+    "demo": "node record.js --url file://$PWD/tests/fixtures/demo.html --output tests/recorded/demo.spec.js --title \"demo flow\"",
+    "smoke": "node scripts/smoke.js",
+    "e2e": "node scripts/e2e.js",
+    "highlight:check": "node scripts/highlight-check.js",
+    "demo:record": "node scripts/record-demo.js",
+    "demo:replay": "playwright test tests/recorded/demo.spec.js",
+    "replay-check": "npm run demo:record && npm run demo:replay",
+    "live:record": "node scripts/record-live.js --url https://demo.playwright.dev/todomvc/ --driver scripts/live/todomvc.js --title \"todomvc flow\"",
+    "live:verify": "node scripts/record-live.js --url https://demo.playwright.dev/todomvc/ --driver scripts/live/todomvc.js --title \"todomvc flow\" --verify && playwright test tests/recorded/todomvc.verify.spec.js",
+    "install-browser": "playwright install chromium",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

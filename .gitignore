@@ -1,0 +1,12 @@
+node_modules/
+.npm-cache/
+.e2e-out/
+.pw-browsers/
+tests/recorded/*.spec.js
+!tests/recorded/.gitkeep
+playwright-report/
+test-results/
+.DS_Store
+
+# 生成的回放高亮支持文件
+tests/recorded/_pw-highlight.js
