@@ -35,10 +35,13 @@ pw-recorder/
 ## 安装
 
 ```bash
-cd pw-recorder
+git clone https://github.com/lxf-lxf/pw-recoder.git
+cd pw-recoder
 npm install
 npm run install-browser      # 下载 Chromium（约 150MB，首次需要）
 ```
+
+> 仓库名是 `pw-recoder`（少一个 r），包名/CLI 仍是 `pw-recorder`。
 
 > 受限环境（沙箱/CI）里浏览器可能装在项目内的 `./.pw-browsers`。
 > 只要显式设置过 `PLAYWRIGHT_BROWSERS_PATH` 就以你为准，否则脚本会自动使用该目录。
